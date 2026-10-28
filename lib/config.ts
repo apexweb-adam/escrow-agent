@@ -11,4 +11,10 @@ export const config = {
 };
 export const paypalMock = () => !config.paypalClientId || !config.paypalSecret;
 export const aiMock = () => !config.llmKey;
-export const paypalApi = () => (config.paypalEnv === "live" ? "https://api-m.paypal.com" : "https://api-m.sandbox.paypal.com");
+const PAYPAL_HOSTS = new Set(["api-m.paypal.com", "api-m.sandbox.paypal.com"]);
+export const paypalApi = () => {
+  // Optional PAYPAL_API_BASE override, restricted to the two official PayPal API hosts.
+  const o = process.env.PAYPAL_API_BASE;
+  if (o) { try { const u = new URL(o); if (u.protocol === "https:" && PAYPAL_HOSTS.has(u.host)) return u.origin; } catch { /* fall through */ } }
+  return config.paypalEnv === "live" ? "https://api-m.paypal.com" : "https://api-m.sandbox.paypal.com";
+};
