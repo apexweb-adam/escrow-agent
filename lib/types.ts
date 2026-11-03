@@ -1,3 +1,5 @@
+import type { GitHubEvidence } from "./evidence";
+
 export type MilestoneStatus = "draft" | "awaiting_approval" | "funded" | "submitted" | "verified" | "released" | "rejected" | "disputed";
 
 export interface Criterion { id: string; text: string; }
@@ -10,6 +12,8 @@ export interface Verification {
   summary: string;
   model: string;
   at: string;
+  facts?: GitHubEvidence; // server-fetched, trusted; the verdict applies to facts.sha
+  factsError?: string;
 }
 
 export interface Milestone {
@@ -22,6 +26,8 @@ export interface Milestone {
   orderId?: string;
   approveUrl?: string;
   authorizationId?: string;
+  authorizedAt?: string;      // PayPal honor period is 3 days, the authorization is valid 29 days
+  reauthorizedAt?: string;    // PayPal allows one reauthorization per authorization
   captureId?: string;
   deliverable?: { url: string; notes: string; submittedAt: string };
   verification?: Verification;
@@ -45,7 +51,7 @@ export interface LedgerEntry {
   dealId: string;
   milestoneId: string;
   milestone: string;
-  event: "order_created" | "authorized" | "submitted" | "ai_verified" | "ai_rejected" | "captured" | "voided" | "dispute_opened" | "webhook";
+  event: "order_created" | "authorized" | "submitted" | "ai_verified" | "ai_rejected" | "captured" | "reauthorized" | "voided" | "dispute_opened" | "webhook";
   amount: number;
   currency: string;
   paypalRef: string;

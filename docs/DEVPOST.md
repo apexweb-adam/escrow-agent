@@ -8,7 +8,7 @@ Freelancers fear not getting paid. Clients fear paying for work that is not done
 2. The AI planner splits it into milestones, splits the budget to the cent, and writes objective acceptance criteria for each.
 3. The client funds a milestone with PayPal. We use Orders v2 with `intent=AUTHORIZE`, so funds are held, not spent.
 4. The freelancer submits a deliverable link and notes.
-5. The AI verifier checks each criterion and returns pass or fail with evidence and confidence.
+5. The AI verifier checks each criterion and returns pass or fail with evidence and confidence. If the deliverable is a GitHub link, the server first fetches the exact commit, changed files and CI results from GitHub. Criteria about tests, builds or lint are decided by CI on that commit, so "all tests pass" in the notes means nothing if CI is red.
 6. On pass, the client approves and we capture the authorization. On fail, the freelancer can resubmit, or the agent builds a dispute evidence pack (timeline, failed criteria, PayPal ids, recommendation) and the hold can be voided.
 7. Every money and agent event lands in an AG Grid ledger.
 
@@ -27,6 +27,7 @@ The agent plans, verifies and recommends; it never moves money on its own. Captu
 - Mapping escrow onto PayPal primitives: authorize-then-capture gives us a real hold without needing a marketplace license
 - Making AI verification auditable: per-criterion evidence instead of one opaque score
 - Keeping the demo runnable without credentials
+- Holds that outlive PayPal's 3-day honor period: we track it and reauthorize once before capture, and refuse to capture after 29 days
 
 ## Accomplishments
 - End-to-end flow works in mock and sandbox modes
@@ -36,7 +37,7 @@ The agent plans, verifies and recommends; it never moves money on its own. Captu
 Authorization holds are an underused primitive for trust between strangers, and an AI is far more useful as a careful checker with a human gate than as an autonomous spender.
 
 ## What's next
-Repo-aware verification (run the freelancer's test suite in a sandbox, Lighthouse checks, design diffs), PayPal Payouts for multi-party gigs, Postgres persistence and per-party auth.
+Running the freelancer's test suite in our own sandbox (today we trust the repo's CI), Lighthouse checks, design diffs, PayPal Payouts for multi-party gigs, Postgres persistence and per-party auth.
 
 ## Built with
 nextjs, typescript, paypal-orders-api, paypal-webhooks, openai-compatible-llm, ag-grid, render, zod, vitest

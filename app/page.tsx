@@ -70,6 +70,9 @@ function MilestoneCard({ m, cur, busy, run }: { m: Milestone; cur: string; busy:
       <div className="muted">{m.description}</div>
       <ul className="crit">{m.criteria.map((c) => { const r = res.get(c.id); return <li key={c.id} className={r ? (r.pass ? "pass" : "fail") : ""}>{c.text}{r && <div style={{ fontSize: 12 }}>{r.pass ? "PASS" : "FAIL"}: {r.evidence}</div>}</li>; })}</ul>
       {m.verification && <p className="muted">AI verdict: <b>{m.verification.verdict.toUpperCase()}</b> ({Math.round(m.verification.confidence * 100)}% conf, {m.verification.model}). {m.verification.summary}</p>}
+      {m.verification?.facts && <p className="muted">Server-checked: <a href={`https://github.com/${m.verification.facts.repo}/commit/${m.verification.facts.sha}`} target="_blank" rel="noreferrer">{m.verification.facts.repo}@{m.verification.facts.sha.slice(0, 7)}</a>, CI <b className={m.verification.facts.ci === "success" ? "pass" : "fail"}>{m.verification.facts.ci}</b>{m.verification.facts.checks.length ? ` (${m.verification.facts.checks.map((k) => `${k.name}: ${k.state}`).join(", ")})` : ""}</p>}
+      {m.verification?.factsError && <p className="muted">GitHub evidence unavailable: {m.verification.factsError}</p>}
+      {m.reauthorizedAt && <p className="muted">PayPal hold reauthorized {new Date(m.reauthorizedAt).toLocaleString()} (3-day honor period had passed).</p>}
       <div className="row">
         {(m.status === "draft" || m.status === "awaiting_approval") && <button disabled={!!busy} onClick={() => run(`fund-${m.id}`, async () => { const j = await api<{ approveUrl: string }>(`/api/milestones/${m.id}/fund`, {}); window.location.href = j.approveUrl; })}>{b("fund") ? "Creating order..." : "Fund with PayPal"}</button>}
         {(m.status === "funded" || m.status === "rejected") && <>

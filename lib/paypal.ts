@@ -82,6 +82,15 @@ export async function captureAuthorization(authId: string, milestoneId: string):
   return j.id;
 }
 
+// After the 3-day honor period PayPal may decline a capture of the original authorization.
+// One reauthorization is allowed (days 4 to 29) and returns a NEW authorization id.
+export async function reauthorizeAuthorization(authId: string, amount: number, currency: string): Promise<string> {
+  if (paypalMock()) return `MOCKREAUTH_${authId.slice(-8)}`;
+  const j = await pp<{ id: string }>(`/v2/payments/authorizations/${encodeURIComponent(authId)}/reauthorize`,
+    { amount: { currency_code: currency, value: amount.toFixed(2) } }, `reauth-${authId}`);
+  return j.id;
+}
+
 export async function voidAuthorization(authId: string): Promise<void> {
   if (paypalMock()) return;
   await pp(`/v2/payments/authorizations/${encodeURIComponent(authId)}/void`, undefined, `void-${authId}`);

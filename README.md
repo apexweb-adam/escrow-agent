@@ -9,6 +9,8 @@ Escrow Agent is milestone escrow for freelance gigs. A client and freelancer pas
 - AI milestone planner: scope in, 2 to 5 milestones out, with budget split to the cent and testable criteria
 - PayPal Orders v2: create order (AUTHORIZE), buyer approval redirect, authorize, capture authorization, void authorization, with `PayPal-Request-Id` idempotency keys
 - AI deliverable verifier: per-criterion pass/fail with evidence and confidence; server re-derives the verdict so the model cannot pass a milestone with a failing criterion
+- Server-checked evidence: when the deliverable is a GitHub repo, PR or commit link, the server asks GitHub itself for the exact commit, changed files and CI check results. Criteria about tests, builds, lint or pipelines are decided by CI on that commit, not by the model or the freelancer's notes ("all tests pass" with red CI fails). The verdict records the commit sha it applies to
+- PayPal hold lifetime: authorizations are honored for 3 days and valid for 29. Release after day 3 reauthorizes once (`/v2/payments/authorizations/{id}/reauthorize`) and then captures; after day 29 the app refuses to capture and sends the milestone back to funding
 - Human approval gate: the agent recommends, only the client releases money
 - Dispute evidence pack: timeline, failed criteria, PayPal references, recommendation
 - AG Grid escrow ledger: every order, hold, verification, capture, void and webhook, filterable and paginated
@@ -45,7 +47,8 @@ draft -> awaiting_approval -> funded -> submitted -> verified -> released
 | Layer | File |
 | --- | --- |
 | PayPal client (OAuth, orders, authorize, capture, void, webhook verify) | `lib/paypal.ts` |
-| AI planner and verifier, mock fallbacks | `lib/ai.ts` |
+| AI planner and verifier, CI gate, mock fallbacks | `lib/ai.ts` |
+| GitHub evidence collector (api.github.com only, validated owner/repo/ref) | `lib/evidence.ts` |
 | Escrow state machine and dispute pack | `lib/escrow.ts` |
 | Validation (zod), rate limiting, origin checks | `lib/validation.ts`, `lib/ratelimit.ts`, `lib/http.ts` |
 | UI and AG Grid ledger | `app/page.tsx`, `app/Ledger.tsx` |
