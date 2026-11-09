@@ -1,18 +1,21 @@
 // All secrets are read from the environment only. Never log these values.
+// Getters, so values are read at request time (works on Node and on Workers with nodejs_compat).
+const env = (k: string) => process.env[k] ?? "";
 export const config = {
-  paypalEnv: process.env.PAYPAL_ENV === "live" ? "live" : "sandbox",
-  paypalClientId: process.env.PAYPAL_CLIENT_ID ?? "",
-  paypalSecret: process.env.PAYPAL_CLIENT_SECRET ?? "",
-  paypalWebhookId: process.env.PAYPAL_WEBHOOK_ID ?? "",
-  llmKey: process.env.LLM_API_KEY ?? "",
-  llmBaseUrl: (process.env.LLM_BASE_URL ?? "https://api.openai.com/v1").replace(/\/$/, ""),
-  llmModel: process.env.LLM_MODEL ?? "gpt-4o-mini",
-  baseUrl: (process.env.APP_BASE_URL
-    || (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : "")
-    || "http://localhost:3000").replace(/\/$/, ""),
+  get paypalEnv() { return env("PAYPAL_ENV") === "live" ? "live" : "sandbox"; },
+  get paypalClientId() { return env("PAYPAL_CLIENT_ID"); },
+  get paypalSecret() { return env("PAYPAL_CLIENT_SECRET"); },
+  get paypalWebhookId() { return env("PAYPAL_WEBHOOK_ID"); },
+  get llmKey() { return env("LLM_API_KEY"); },
+  get llmBaseUrl() { return (env("LLM_BASE_URL") || "https://api.openai.com/v1").replace(/\/$/, ""); },
+  get llmModel() { return env("LLM_MODEL") || "gpt-4o-mini"; },
+  get baseUrl() {
+    return (env("APP_BASE_URL")
+      || (env("VERCEL_PROJECT_PRODUCTION_URL") ? `https://${env("VERCEL_PROJECT_PRODUCTION_URL")}` : "")
+      || "http://localhost:3000").replace(/\/$/, "");
+  },
 };
 export const paypalMock = () => !config.paypalClientId || !config.paypalSecret;
-export const aiMock = () => !config.llmKey;
 const PAYPAL_HOSTS = new Set(["api-m.paypal.com", "api-m.sandbox.paypal.com"]);
 export const paypalApi = () => {
   // Optional PAYPAL_API_BASE override, restricted to the two official PayPal API hosts.

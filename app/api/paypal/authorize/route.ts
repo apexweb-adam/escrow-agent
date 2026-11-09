@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server";
 import { z } from "zod";
 import { onApproved } from "@/lib/escrow";
 import { withSession } from "@/lib/session";
@@ -12,6 +11,6 @@ export async function POST(req: Request) {
     const { state, body } = await readSession(req);
     const { orderId } = Body.parse(body);
     const out = await withSession(state, () => onApproved(orderId));
-    return NextResponse.json({ state: out.state, deals: out.deals, ledger: out.ledger });
+    return Response.json({ state: out.state, deals: out.deals, ledger: out.ledger });
   } catch (e) { return fail(e); }
 }

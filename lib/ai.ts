@@ -1,11 +1,28 @@
-import { aiMock, config } from "./config";
+import { config } from "./config";
 import { newId } from "./id";
 import type { Milestone, Verification } from "./types";
 import { describeEvidence, isCiGated, type GitHubEvidence } from "./evidence";
 import { MilestonePlanSchema, VerifySchema } from "./validation";
 import type { z } from "zod";
 
+export const aiMock = () => !config.llmKey && aiBinding === null;
+
+// On Cloudflare Workers the hosted demo calls Workers AI through its native binding (no key).
+type AiBinding = { run: (model: string, input: Record<string, unknown>) => Promise<{ response?: unknown }> };
+let aiBinding: AiBinding | null = null;
+export function setAiBinding(b: AiBinding | null) { aiBinding = b; }
+export const hasAiBinding = () => aiBinding !== null;
+
 async function chatJson(system: string, user: string): Promise<unknown> {
+  if (aiBinding) {
+    const out = await aiBinding.run(config.llmModel, { temperature: 0.1, max_tokens: 1500, response_format: { type: "json_object" },
+      messages: [{ role: "system", content: system }, { role: "user", content: user }] });
+    const r = out?.response;
+    if (r && typeof r === "object") return r;
+    const t = String(r ?? ""); const a = t.indexOf("{"); const b = t.lastIndexOf("}");
+    if (a < 0 || b <= a) throw new Error("LLM returned no JSON");
+    return JSON.parse(t.slice(a, b + 1));
+  }
   const r = await fetch(`${config.llmBaseUrl}/chat/completions`, {
     method: "POST",
     headers: { Authorization: `Bearer ${config.llmKey}`, "Content-Type": "application/json" },

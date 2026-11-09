@@ -9,5 +9,6 @@ export function rateLimit(key: string, limit = 30, windowMs = 60_000): { ok: boo
   return h.n > limit ? { ok: false, retryAfter: Math.ceil((h.reset - now) / 1000) } : { ok: true, retryAfter: 0 };
 }
 export function clientIp(req: Request): string {
-  return (req.headers.get("x-forwarded-for")?.split(",")[0] ?? req.headers.get("x-real-ip") ?? "local").trim();
+  // cf-connecting-ip is set by Cloudflare and cannot be spoofed by the client; fall back to proxy headers elsewhere.
+  return (req.headers.get("cf-connecting-ip") ?? req.headers.get("x-forwarded-for")?.split(",")[0] ?? req.headers.get("x-real-ip") ?? "local").trim();
 }

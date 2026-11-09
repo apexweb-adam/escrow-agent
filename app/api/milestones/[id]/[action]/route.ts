@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server";
 import { cancel, dispute, fund, fundWithTestCard, liveStatus, release, submitAndVerify } from "@/lib/escrow";
 import { withSession } from "@/lib/session";
 import { IdSchema, SubmitSchema } from "@/lib/validation";
@@ -8,7 +7,7 @@ const ACTIONS = new Set(["fund", "fund-card", "submit", "release", "cancel", "di
 
 export async function POST(req: Request, ctx: { params: Promise<{ id: string; action: string }> }) {
   const { id: rawId, action } = await ctx.params;
-  if (!ACTIONS.has(action)) return NextResponse.json({ error: "unknown action" }, { status: 404 });
+  if (!ACTIONS.has(action)) return Response.json({ error: "unknown action" }, { status: 404 });
   const g = guard(req, `ms-${action}`, action === "submit" ? 10 : 30); if (g) return g;
   try {
     const id = IdSchema.parse(rawId);
@@ -24,6 +23,6 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string; ac
         default: return liveStatus(id);
       }
     });
-    return NextResponse.json({ ...(out.result as object), state: out.state, deals: out.deals, ledger: out.ledger });
+    return Response.json({ ...(out.result as object), state: out.state, deals: out.deals, ledger: out.ledger });
   } catch (e) { return fail(e); }
 }

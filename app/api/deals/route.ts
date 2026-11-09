@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server";
 import { createDeal } from "@/lib/escrow";
 import { withSession } from "@/lib/session";
 import { CreateDealSchema } from "@/lib/validation";
@@ -11,6 +10,6 @@ export async function POST(req: Request) {
     const { state, body } = await readSession(req);
     const input = CreateDealSchema.parse(body);
     const out = await withSession(state, () => createDeal(input));
-    return NextResponse.json({ deal: out.result, state: out.state, deals: out.deals, ledger: out.ledger }, { status: 201 });
+    return Response.json({ deal: out.result, state: out.state, deals: out.deals, ledger: out.ledger }, { status: 201 });
   } catch (e) { return fail(e); }
 }
