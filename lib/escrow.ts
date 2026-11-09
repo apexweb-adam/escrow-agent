@@ -1,6 +1,7 @@
 import { verifyDeliverable, planMilestones } from "./ai";
 import { authorizeOrder, captureAuthorization, createMilestoneOrder, createTestCardAuthorization, getAuthorizationStatus, reauthorizeAuthorization, voidAuthorization } from "./paypal";
 import { collectGitHubEvidence, type GitHubEvidence } from "./evidence";
+import { checkLinks, type LinkFact } from "./linkcheck";
 import { cur, findMilestone, log, MAX_DEALS } from "./store";
 import { newId } from "./id";
 import type { Deal, DisputePack, MilestoneStatus } from "./types";
@@ -12,6 +13,7 @@ export const AUTH_VALID_MS = 29 * DAY;    // and keeps it valid for 29 days
 // Swappable in tests; production asks GitHub directly.
 export const deps = {
   collectEvidence: (url: string): Promise<GitHubEvidence | null> => collectGitHubEvidence(url),
+  checkLinks: (url: string, notes: string): Promise<LinkFact[]> => checkLinks(url, notes),
   now: () => Date.now(),
 };
 
@@ -85,7 +87,8 @@ export async function submitAndVerify(milestoneId: string, url: string, notes: s
   let facts: GitHubEvidence | undefined; let factsError: string | undefined;
   try { facts = (await deps.collectEvidence(url)) ?? undefined; }
   catch (e) { factsError = e instanceof Error ? e.message : "evidence fetch failed"; }
-  const v = { ...(await verifyDeliverable(m, url, notes, facts)), ...(factsError ? { factsError } : {}) };
+  const links = await deps.checkLinks(url, notes);
+  const v = { ...(await verifyDeliverable(m, url, notes, facts, links)), ...(factsError ? { factsError } : {}) };
   m.verification = v;
   m.status = v.verdict === "pass" ? "verified" : "rejected";
   log({ dealId: deal.id, milestoneId: m.id, milestone: m.title, event: v.verdict === "pass" ? "ai_verified" : "ai_rejected", amount: 0, currency: deal.currency, paypalRef: "", actor: "agent", note: v.summary });

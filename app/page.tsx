@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import type { Deal, LedgerEntry, Milestone } from "@/lib/types";
 const Ledger = dynamic(() => import("./Ledger"), { ssr: false });
 
-const SAMPLE = `Build a marketing landing page for a coffee subscription startup. Deliver a Figma design with mobile and desktop layouts. Implement the page in Next.js with a responsive hero, pricing table and signup form. Connect the signup form to Mailchimp and add analytics events. Deploy to production with a Lighthouse performance score above 90 and hand over the repository with a README.`;
+const SAMPLE = `Build an open-source milestone escrow web app in Next.js and TypeScript. Publish the source code in a public GitHub repository. Include a README that explains setup and the architecture, and add an MIT license file.`;
 // Saves the session before leaving the page for PayPal approval.
 function persist(j: { state?: string; deals?: Deal[]; ledger?: LedgerEntry[] }) { if (j.state) { session = j.state; try { localStorage.setItem("escrow-agent-session-v1", JSON.stringify(j)); } catch { /* ignore */ } } }
 const ORDER = ["draft", "awaiting_approval", "funded", "submitted", "verified", "released"];
@@ -26,7 +26,7 @@ export default function Home() {
   const [ledger, setLedger] = useState<LedgerEntry[]>([]);
   const [status, setStatus] = useState<Status | null>(null);
   const [live, setLive] = useState<Record<string, string>>({});
-  const [form, setForm] = useState({ title: "Coffee startup landing page", client: "Brewly Inc.", freelancer: "Dana (freelance dev)", currency: "USD", budget: 2400, scope: SAMPLE });
+  const [form, setForm] = useState({ title: "Open-source escrow app", client: "Brewly Inc.", freelancer: "Dana (freelance dev)", currency: "USD", budget: 2400, scope: SAMPLE });
   const [busy, setBusy] = useState(""); const [err, setErr] = useState("");
   const apply = useCallback((j: Partial<Snap>) => {
     if (!j.state) return;
@@ -86,7 +86,7 @@ export default function Home() {
 }
 
 function MilestoneCard({ m, cur, busy, run, testCard, live, setLive }: { m: Milestone; cur: string; busy: string; run: (k: string, f: () => Promise<unknown>) => Promise<void>; testCard: boolean; live?: string; setLive: (v: string) => void }) {
-  const [url, setUrl] = useState("https://github.com/example/landing/pull/1");
+  const [url, setUrl] = useState("https://github.com/apexweb-adam/escrow-agent");
   const [notes, setNotes] = useState("");
   const idx = ORDER.indexOf(m.status);
   const res = new Map(m.verification?.results.map((r) => [r.criterionId, r]));
@@ -99,6 +99,7 @@ function MilestoneCard({ m, cur, busy, run, testCard, live, setLive }: { m: Mile
       <ul className="crit">{m.criteria.map((c) => { const r = res.get(c.id); return <li key={c.id} className={r ? (r.pass ? "pass" : "fail") : ""}>{c.text}{r && <div style={{ fontSize: 12 }}>{r.pass ? "PASS" : "FAIL"}: {r.evidence}</div>}</li>; })}</ul>
       {m.verification && <p className="muted">AI verdict: <b>{m.verification.verdict.toUpperCase()}</b> ({Math.round(m.verification.confidence * 100)}% conf, {m.verification.model}). {m.verification.summary}</p>}
       {m.verification?.facts && <p className="muted">Server-checked: <a href={`https://github.com/${m.verification.facts.repo}/commit/${m.verification.facts.sha}`} target="_blank" rel="noreferrer">{m.verification.facts.repo}@{m.verification.facts.sha.slice(0, 7)}</a>, CI <b className={m.verification.facts.ci === "success" ? "pass" : "fail"}>{m.verification.facts.ci}</b>{m.verification.facts.checks.length ? ` (${m.verification.facts.checks.map((k) => `${k.name}: ${k.state}`).join(", ")})` : ""}</p>}
+      {m.verification?.links && m.verification.links.length > 0 && <ul className="links">{m.verification.links.map((l) => <li key={l.url} className={l.ok ? "pass" : "fail"}>{l.ok ? "Link verified" : "Link refused"}: {l.url.length > 70 ? l.url.slice(0, 67) + "..." : l.url} | {l.ok ? `${l.status} ${l.contentType}${l.title ? `, "${l.title}"` : ""}` : l.reason}</li>)}</ul>}
       {m.verification?.factsError && <p className="muted">GitHub evidence unavailable: {m.verification.factsError}</p>}
       {m.reauthorizedAt && <p className="muted">PayPal hold reauthorized {new Date(m.reauthorizedAt).toLocaleString()} (3-day honor period had passed).</p>}
       <div className="row">
@@ -106,7 +107,7 @@ function MilestoneCard({ m, cur, busy, run, testCard, live, setLive }: { m: Mile
         {(m.status === "draft" || m.status === "awaiting_approval") && testCard && <button className="ghost" disabled={!!busy} onClick={() => run(`card-${m.id}`, () => call(`/api/milestones/${m.id}/fund-card`, {}))}>{b("card") ? "Authorizing..." : "Fund with sandbox test card"}</button>}
         {(m.status === "funded" || m.status === "rejected") && <>
           <input style={{ flex: 2 }} value={url} onChange={(e) => setUrl(e.target.value)} placeholder="Deliverable URL" />
-          <textarea style={{ minHeight: 60 }} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Freelancer delivery notes: what was done, evidence per criterion" />
+          <textarea style={{ minHeight: 60 }} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Delivery notes: one public evidence link per criterion. The server opens every link; private, missing or non-allowlisted links do not count." />
           <button disabled={!!busy || !notes} onClick={() => run(`sub-${m.id}`, () => call(`/api/milestones/${m.id}/submit`, { url, notes }))}>{b("sub") ? "AI verifying..." : "Submit for AI verification"}</button>
         </>}
         {m.status === "verified" && <button className="ok" disabled={!!busy} onClick={() => run(`rel-${m.id}`, () => call(`/api/milestones/${m.id}/release`, {}))}>Approve and release (capture)</button>}

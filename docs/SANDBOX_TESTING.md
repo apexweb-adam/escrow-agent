@@ -16,7 +16,7 @@ Run `node scripts/sandbox-check.mjs` (add `--card` for the full server-side life
 
 ## Hosted demo, verified 2026-11-09
 
-`node scripts/e2e.mjs https://escrow-agent.apexweb-adam.workers.dev` passes 14 of 14 checks against the real sandbox: AI planning, wallet order creation, test-card hold, prompt-injection rejection, capture refused before verification, verified capture, live status CAPTURED, hold and void with live status VOIDED, replayed session refused (PayPal says CAPTURED), forged session rejected. A sandbox webhook is registered for the live URL and real `PAYMENT.AUTHORIZATION.CREATED` events pass `verify-webhook-signature`.
+`node scripts/e2e.mjs https://escrow-agent.apexweb-adam.workers.dev` passes 16 of 16 checks (after the link checker: also a made-up Figma link refused and every real evidence link opened by the server) against the real sandbox: AI planning, wallet order creation, test-card hold, prompt-injection rejection, capture refused before verification, verified capture, live status CAPTURED, hold and void with live status VOIDED, replayed session refused (PayPal says CAPTURED), forged session rejected. A sandbox webhook is registered for the live URL and real `PAYMENT.AUTHORIZATION.CREATED` events pass `verify-webhook-signature`.
 
 ## Needs a browser buyer approval
 

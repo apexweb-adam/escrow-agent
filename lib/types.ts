@@ -1,4 +1,5 @@
 import type { GitHubEvidence } from "./evidence";
+import type { LinkFact } from "./linkcheck";
 
 export type MilestoneStatus = "draft" | "awaiting_approval" | "funded" | "submitted" | "verified" | "released" | "rejected" | "disputed";
 
@@ -14,6 +15,7 @@ export interface Verification {
   at: string;
   facts?: GitHubEvidence; // server-fetched, trusted; the verdict applies to facts.sha
   factsError?: string;
+  links?: LinkFact[];      // every cited link, opened and checked by the server
 }
 
 export interface Milestone {

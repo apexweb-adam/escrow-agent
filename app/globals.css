@@ -26,3 +26,4 @@ pre{white-space:pre-wrap;background:#0a1028;border:1px solid var(--line);padding
 .ledger{height:320px;margin-top:20px}
 .note{font-size:13px;color:var(--text);background:#13224a;border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:0 0 20px}
 button.link{background:none;border:0;padding:0 4px;color:var(--accent);text-decoration:underline;font-size:13px}
+ul.links{margin:4px 0 8px;padding-left:18px;font-size:12px;color:var(--muted)}ul.links li.pass{color:var(--ok)}ul.links li.fail{color:var(--bad)}
