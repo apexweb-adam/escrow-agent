@@ -1,19 +1,16 @@
 import { NextResponse } from "next/server";
 import { createDeal } from "@/lib/escrow";
-import { db } from "@/lib/store";
-import { aiMock, paypalMock } from "@/lib/config";
+import { withSession } from "@/lib/session";
 import { CreateDealSchema } from "@/lib/validation";
-import { fail, guard, readJson } from "@/lib/http";
+import { fail, guard, readSession } from "@/lib/http";
 
-export async function GET(req: Request) {
-  const g = guard(req, "read", 120); if (g) return g;
-  return NextResponse.json({ deals: [...db.deals.values()].reverse(), ledger: db.ledger, mode: { paypal: paypalMock() ? "mock" : "sandbox", ai: aiMock() ? "mock" : "llm" } });
-}
-
+// Creates a deal inside the caller's own signed session (no shared server state).
 export async function POST(req: Request) {
   const g = guard(req, "plan", 10); if (g) return g;
   try {
-    const input = CreateDealSchema.parse(await readJson(req));
-    return NextResponse.json({ deal: await createDeal(input) }, { status: 201 });
+    const { state, body } = await readSession(req);
+    const input = CreateDealSchema.parse(body);
+    const out = await withSession(state, () => createDeal(input));
+    return NextResponse.json({ deal: out.result, state: out.state, deals: out.deals, ledger: out.ledger }, { status: 201 });
   } catch (e) { return fail(e); }
 }

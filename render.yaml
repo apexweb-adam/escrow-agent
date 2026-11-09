@@ -25,3 +25,5 @@ services:
         value: gpt-4o-mini
       - key: APP_BASE_URL
         sync: false
+      - key: STATE_SECRET
+        generateValue: true

@@ -84,6 +84,8 @@ describe("CI gate (ground truth beats claims)", () => {
     expect(isCiGated("All unit tests pass")).toBe(true);
     expect(isCiGated("Production build succeeds")).toBe(true);
     expect(isCiGated("Pricing table shows three tiers")).toBe(false);
+    expect(isCiGated("Delivers: Build a marketing landing page")).toBe(false);
+    expect(isCiGated("The build passes on main")).toBe(true);
   });
   it("a freelancer claiming green tests still fails when CI is red", () => {
     const m = ms(["All unit tests pass", "Pricing table shows three tiers"]);

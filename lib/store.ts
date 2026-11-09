@@ -1,13 +1,25 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import type { Deal, LedgerEntry, Milestone } from "./types";
 import { newId } from "./id";
 
-// In-memory store (single instance demo). Swap for Postgres in production.
-type DB = { deals: Map<string, Deal>; ledger: LedgerEntry[] };
+// Escrow state. On a serverless host there is no shared memory between requests, so each
+// browser session carries its own state as an HMAC-signed token (see lib/session.ts) and the
+// request runs against a private copy of it. Outside a request (tests, scripts) a process-wide
+// store is used. PayPal stays the source of truth for money: captures re-check the live
+// authorization status before moving funds.
+export type DB = { deals: Map<string, Deal>; ledger: LedgerEntry[] };
 const g = globalThis as unknown as { __escrowDb?: DB };
 export const db: DB = g.__escrowDb ?? (g.__escrowDb = { deals: new Map(), ledger: [] });
 
+const als = new AsyncLocalStorage<DB>();
+export const cur = (): DB => als.getStore() ?? db;
+export const runIn = <T>(state: DB, fn: () => Promise<T>) => als.run(state, fn);
+
+export const MAX_DEALS = 3;
+export const MAX_LEDGER = 150;
+
 export function findMilestone(milestoneId: string): { deal: Deal; m: Milestone } | null {
-  for (const deal of db.deals.values()) {
+  for (const deal of cur().deals.values()) {
     const m = deal.milestones.find((x) => x.id === milestoneId);
     if (m) return { deal, m };
   }
@@ -15,7 +27,7 @@ export function findMilestone(milestoneId: string): { deal: Deal; m: Milestone }
 }
 
 export function findByOrder(orderId: string) {
-  for (const deal of db.deals.values()) {
+  for (const deal of cur().deals.values()) {
     const m = deal.milestones.find((x) => x.orderId === orderId);
     if (m) return { deal, m };
   }
@@ -23,8 +35,9 @@ export function findByOrder(orderId: string) {
 }
 
 export function log(e: Omit<LedgerEntry, "id" | "at">): LedgerEntry {
+  const s = cur();
   const entry = { ...e, id: newId("led"), at: new Date().toISOString() };
-  db.ledger.push(entry);
-  if (db.ledger.length > 5000) db.ledger.shift();
+  s.ledger.push(entry);
+  if (s.ledger.length > MAX_LEDGER) s.ledger.shift();
   return entry;
 }

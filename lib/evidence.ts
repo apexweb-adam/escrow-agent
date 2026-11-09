@@ -90,7 +90,11 @@ export async function collectGitHubEvidence(url: string, f: Fetch = fetch): Prom
 }
 
 /** Criteria that CI can decide on its own: tests, builds, lint, type checks, pipelines. */
-export const isCiGated = (text: string) => /\b(tests?|unit tests?|test suite|ci|build|builds|pipeline|lint|linter|type ?check|typecheck|compiles?)\b/i.test(text);
+// "Build a landing page" is a task, not a CI claim; only build *outcomes* are gated.
+export const isCiGated = (text: string) =>
+  /\b(tests?|unit tests?|test suite|ci|pipeline|lint|linter|type ?check|typecheck|compiles?)\b/i.test(text)
+  || /\bbuilds?\s+(passes|pass|succeeds?|is green|green|without (errors|warnings)|cleanly)\b/i.test(text)
+  || /\b(passing|green|successful|clean|production)\s+builds?\b/i.test(text);
 
 export function describeEvidence(e: GitHubEvidence): string {
   const checks = e.checks.length ? e.checks.map((c) => `${c.name}=${c.state}`).join(", ") : "no checks reported";

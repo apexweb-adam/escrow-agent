@@ -20,9 +20,9 @@ async function accessToken(): Promise<string> {
   return j.access_token;
 }
 
-async function pp<T>(path: string, body?: unknown, idempotencyKey?: string): Promise<T> {
+async function pp<T>(path: string, body?: unknown, idempotencyKey?: string, method: "POST" | "GET" = "POST"): Promise<T> {
   const r = await fetch(`${paypalApi()}${path}`, {
-    method: "POST",
+    method,
     headers: {
       Authorization: `Bearer ${await accessToken()}`,
       "Content-Type": "application/json",
@@ -31,7 +31,11 @@ async function pp<T>(path: string, body?: unknown, idempotencyKey?: string): Pro
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const text = await r.text();
-  if (!r.ok) throw new Error(`PayPal ${path} failed (${r.status}): ${text.slice(0, 300)}`);
+  if (!r.ok) {
+    let issue = "";
+    try { const e = JSON.parse(text) as { name?: string; details?: { issue?: string }[] }; issue = e.details?.[0]?.issue ?? e.name ?? ""; } catch { /* not JSON */ }
+    throw new Error(`PayPal ${path.split("/").slice(0, 4).join("/")} failed (${r.status}${issue ? " " + issue : ""})`);
+  }
   return (text ? JSON.parse(text) : {}) as T;
 }
 
@@ -59,7 +63,7 @@ export async function createMilestoneOrder(p: { milestoneId: string; title: stri
         cancel_url: `${config.baseUrl}/?cancelled=1`,
       } } },
     },
-    `create-${p.milestoneId}`,
+    `create-${p.milestoneId}-${newId("try")}`,
   );
   const approve = j.links.find((l) => l.rel === "payer-action" || l.rel === "approve");
   if (!approve) throw new Error("PayPal did not return an approval link");
@@ -78,7 +82,7 @@ export async function authorizeOrder(orderId: string): Promise<string> {
 export async function captureAuthorization(authId: string, milestoneId: string): Promise<string> {
   if (paypalMock()) return `MOCKCAP_${authId.slice(-8)}`;
   const j = await pp<{ id: string }>(`/v2/payments/authorizations/${encodeURIComponent(authId)}/capture`,
-    { final_capture: true, note_to_payer: "Milestone verified and released by Escrow Agent" }, `cap-${milestoneId}`);
+    { final_capture: true, note_to_payer: "Milestone verified and released by Escrow Agent" }, `cap-${milestoneId}-${authId}`);
   return j.id;
 }
 
@@ -89,6 +93,36 @@ export async function reauthorizeAuthorization(authId: string, amount: number, c
   const j = await pp<{ id: string }>(`/v2/payments/authorizations/${encodeURIComponent(authId)}/reauthorize`,
     { amount: { currency_code: currency, value: amount.toFixed(2) } }, `reauth-${authId}`);
   return j.id;
+}
+
+// PayPal's documented sandbox test Visa. Used only when PAYPAL_ENV is sandbox; never accepted from clients.
+const SANDBOX_TEST_CARD = { number: "4111111111111111", expiry: "2030-12", security_code: "123", name: "Sandbox Buyer",
+  billing_address: { address_line_1: "1 Main St", admin_area_2: "San Jose", admin_area_1: "CA", postal_code: "95131", country_code: "US" } };
+
+export async function createTestCardAuthorization(p: { milestoneId: string; title: string; amount: number; currency: string }): Promise<{ orderId: string; authorizationId: string; status: string }> {
+  if (paypalMock()) { const orderId = newId("MOCKORDER").toUpperCase(); return { orderId, authorizationId: `MOCKAUTH_${orderId.slice(-8)}`, status: "CREATED" }; }
+  if (config.paypalEnv !== "sandbox" || !paypalApi().includes("sandbox")) throw new Error("test card funding is sandbox only");
+  const j = await pp<{ id: string; purchase_units: { payments?: { authorizations?: { id: string; status: string }[] } }[] }>(
+    "/v2/checkout/orders",
+    {
+      intent: "AUTHORIZE",
+      purchase_units: [{ reference_id: p.milestoneId, custom_id: p.milestoneId,
+        description: `Escrow milestone: ${p.title}`.slice(0, 127),
+        amount: { currency_code: p.currency, value: p.amount.toFixed(2) } }],
+      payment_source: { card: SANDBOX_TEST_CARD },
+    },
+    `card-${p.milestoneId}-${newId("try")}`,
+  );
+  const a = j.purchase_units[0]?.payments?.authorizations?.[0];
+  if (!a) throw new Error("PayPal did not return an authorization");
+  return { orderId: j.id, authorizationId: a.id, status: a.status };
+}
+
+/** Live status of an authorization straight from PayPal (CREATED, CAPTURED, VOIDED, ...). */
+export async function getAuthorizationStatus(authId: string): Promise<string> {
+  if (paypalMock()) return "CREATED";
+  const j = await pp<{ status: string }>(`/v2/payments/authorizations/${encodeURIComponent(authId)}`, undefined, undefined, "GET");
+  return j.status;
 }
 
 export async function voidAuthorization(authId: string): Promise<void> {

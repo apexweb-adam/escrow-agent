@@ -7,7 +7,9 @@ export const config = {
   llmKey: process.env.LLM_API_KEY ?? "",
   llmBaseUrl: (process.env.LLM_BASE_URL ?? "https://api.openai.com/v1").replace(/\/$/, ""),
   llmModel: process.env.LLM_MODEL ?? "gpt-4o-mini",
-  baseUrl: (process.env.APP_BASE_URL ?? "http://localhost:3000").replace(/\/$/, ""),
+  baseUrl: (process.env.APP_BASE_URL
+    || (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : "")
+    || "http://localhost:3000").replace(/\/$/, ""),
 };
 export const paypalMock = () => !config.paypalClientId || !config.paypalSecret;
 export const aiMock = () => !config.llmKey;

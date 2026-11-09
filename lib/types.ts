@@ -29,6 +29,7 @@ export interface Milestone {
   authorizedAt?: string;      // PayPal honor period is 3 days, the authorization is valid 29 days
   reauthorizedAt?: string;    // PayPal allows one reauthorization per authorization
   captureId?: string;
+  voidedAuthorizationId?: string; // kept after a void so the live PayPal status can still be shown
   deliverable?: { url: string; notes: string; submittedAt: string };
   verification?: Verification;
   disputePack?: DisputePack;
@@ -42,6 +43,7 @@ export interface Deal {
   currency: string;
   scope: string;
   milestones: Milestone[];
+  plannerModel?: string;
   createdAt: string;
 }
 

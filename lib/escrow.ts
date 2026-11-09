@@ -1,7 +1,7 @@
 import { verifyDeliverable, planMilestones } from "./ai";
-import { authorizeOrder, captureAuthorization, createMilestoneOrder, reauthorizeAuthorization, voidAuthorization } from "./paypal";
+import { authorizeOrder, captureAuthorization, createMilestoneOrder, createTestCardAuthorization, getAuthorizationStatus, reauthorizeAuthorization, voidAuthorization } from "./paypal";
 import { collectGitHubEvidence, type GitHubEvidence } from "./evidence";
-import { db, findMilestone, log } from "./store";
+import { cur, findMilestone, log, MAX_DEALS } from "./store";
 import { newId } from "./id";
 import type { Deal, DisputePack, MilestoneStatus } from "./types";
 
@@ -15,7 +15,8 @@ export const deps = {
   now: () => Date.now(),
 };
 
-export class EscrowError extends Error { constructor(msg: string, public status = 400) { super(msg); } }
+import { EscrowError } from "./errors";
+export { EscrowError };
 
 function need(milestoneId: string, allowed: MilestoneStatus[]) {
   const f = findMilestone(milestoneId);
@@ -25,9 +26,15 @@ function need(milestoneId: string, allowed: MilestoneStatus[]) {
 }
 
 export async function createDeal(i: { title: string; client: string; freelancer: string; currency: string; budget: number; scope: string }): Promise<Deal> {
-  const { milestones } = await planMilestones(i.scope, i.budget);
-  const deal: Deal = { id: newId("deal"), title: i.title, client: i.client, freelancer: i.freelancer, currency: i.currency, scope: i.scope, milestones, createdAt: new Date().toISOString() };
-  db.deals.set(deal.id, deal);
+  const { milestones, model } = await planMilestones(i.scope, i.budget);
+  const deal: Deal = { id: newId("deal"), title: i.title, client: i.client, freelancer: i.freelancer, currency: i.currency, scope: i.scope, milestones, plannerModel: model, createdAt: new Date().toISOString() };
+  const s = cur();
+  s.deals.set(deal.id, deal);
+  while (s.deals.size > MAX_DEALS) {
+    const oldest = s.deals.keys().next().value as string;
+    s.deals.delete(oldest);
+    s.ledger = s.ledger.filter((e) => e.dealId !== oldest);
+  }
   return deal;
 }
 
@@ -40,7 +47,7 @@ export async function fund(milestoneId: string) {
 }
 
 export async function onApproved(orderId: string) {
-  for (const deal of db.deals.values()) {
+  for (const deal of cur().deals.values()) {
     const m = deal.milestones.find((x) => x.orderId === orderId);
     if (!m) continue;
     if (m.status !== "awaiting_approval") return deal;
@@ -52,6 +59,22 @@ export async function onApproved(orderId: string) {
     return deal;
   }
   throw new EscrowError("order not found", 404);
+}
+
+/** Sandbox only: fund a milestone with PayPal's public test card so anyone can try the full
+ *  authorize, capture and void lifecycle without a sandbox buyer login. The card number never
+ *  comes from the browser; the server refuses this path outside sandbox. */
+export async function fundWithTestCard(milestoneId: string) {
+  const { deal, m } = need(milestoneId, ["draft", "awaiting_approval"]);
+  const r = await createTestCardAuthorization({ milestoneId: m.id, title: m.title, amount: m.amount, currency: deal.currency });
+  m.orderId = r.orderId; m.approveUrl = undefined;
+  log({ dealId: deal.id, milestoneId: m.id, milestone: m.title, event: "order_created", amount: m.amount, currency: deal.currency, paypalRef: r.orderId, actor: "client", note: "Orders v2 intent=AUTHORIZE, sandbox test card" });
+  m.authorizationId = r.authorizationId;
+  m.authorizedAt = new Date(deps.now()).toISOString();
+  m.reauthorizedAt = undefined;
+  m.status = "funded";
+  log({ dealId: deal.id, milestoneId: m.id, milestone: m.title, event: "authorized", amount: m.amount, currency: deal.currency, paypalRef: r.authorizationId, actor: "paypal", note: `Funds held, authorization ${r.status}` });
+  return m;
 }
 
 export async function submitAndVerify(milestoneId: string, url: string, notes: string) {
@@ -74,6 +97,11 @@ export async function release(milestoneId: string) {
   const { deal, m } = need(milestoneId, ["verified"]);
   if (!m.authorizationId) throw new EscrowError("no authorization on file", 409);
   await keepHoldFresh(deal, m);
+  // PayPal is the source of truth: a replayed or stale session cannot capture a hold that is gone.
+  const live = await getAuthorizationStatus(m.authorizationId!);
+  if (!["CREATED", "PENDING", "PARTIALLY_CAPTURED"].includes(live)) {
+    throw new EscrowError(`PayPal reports this authorization as ${live}; nothing to capture`, 409);
+  }
   m.captureId = await captureAuthorization(m.authorizationId, m.id);
   m.status = "released";
   log({ dealId: deal.id, milestoneId: m.id, milestone: m.title, event: "captured", amount: m.amount, currency: deal.currency, paypalRef: m.captureId, actor: "client", note: "Released after AI verification + client approval" });
@@ -106,15 +134,20 @@ async function keepHoldFresh(deal: Deal, m: Deal["milestones"][number]) {
 
 export async function cancel(milestoneId: string) {
   const { deal, m } = need(milestoneId, ["funded", "rejected", "disputed"]);
-  if (m.authorizationId) await voidAuthorization(m.authorizationId);
+  if (m.authorizationId) {
+    const live = await getAuthorizationStatus(m.authorizationId);
+    if (live === "CAPTURED") throw new EscrowError("PayPal reports this authorization as already captured", 409);
+    if (live !== "VOIDED") await voidAuthorization(m.authorizationId);
+  }
   log({ dealId: deal.id, milestoneId: m.id, milestone: m.title, event: "voided", amount: -m.amount, currency: deal.currency, paypalRef: m.authorizationId ?? "", actor: "client", note: "Authorization voided, funds returned" });
+  m.voidedAuthorizationId = m.authorizationId;
   m.status = "draft"; m.authorizationId = undefined; m.orderId = undefined; m.approveUrl = undefined;
   return m;
 }
 
 export function dispute(milestoneId: string): DisputePack {
   const { deal, m } = need(milestoneId, ["rejected", "submitted", "funded"]);
-  const timeline = db.ledger.filter((e) => e.milestoneId === m.id).map((e) => ({ at: e.at, event: `${e.event} by ${e.actor}: ${e.note}` }));
+  const timeline = cur().ledger.filter((e) => e.milestoneId === m.id).map((e) => ({ at: e.at, event: `${e.event} by ${e.actor}: ${e.note}` }));
   const failed = m.verification?.results.filter((r) => !r.pass) ?? [];
   const pack: DisputePack = {
     generatedAt: new Date().toISOString(),
@@ -127,4 +160,13 @@ export function dispute(milestoneId: string): DisputePack {
   m.disputePack = pack; m.status = "disputed";
   log({ dealId: deal.id, milestoneId: m.id, milestone: m.title, event: "dispute_opened", amount: 0, currency: deal.currency, paypalRef: m.authorizationId ?? "", actor: "client", note: "Evidence pack generated" });
   return pack;
+}
+
+/** Reads the milestone's authorization straight from PayPal so the UI can show the real hold state. */
+export async function liveStatus(milestoneId: string) {
+  const f = findMilestone(milestoneId);
+  if (!f) throw new EscrowError("milestone not found", 404);
+  const id = f.m.authorizationId ?? f.m.voidedAuthorizationId;
+  if (!id) return { paypal: { authorizationId: null, status: "NONE" } };
+  return { paypal: { authorizationId: id, status: await getAuthorizationStatus(id) } };
 }

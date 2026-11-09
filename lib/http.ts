@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
-import { EscrowError } from "./escrow";
+import { EscrowError } from "./errors";
 import { clientIp, rateLimit } from "./ratelimit";
 
 export function guard(req: Request, bucket: string, limit = 30) {
@@ -25,4 +25,12 @@ export async function readJson(req: Request, maxBytes = 20_000): Promise<unknown
   const t = await req.text();
   if (t.length > maxBytes) throw new EscrowError("payload too large", 413);
   try { return JSON.parse(t); } catch { throw new EscrowError("invalid JSON", 400); }
+}
+
+/** Splits a request body into the caller's signed session token and the rest of the payload. */
+export async function readSession(req: Request): Promise<{ state: unknown; body: Record<string, unknown> }> {
+  const j = await readJson(req, 260_000);
+  if (!j || typeof j !== "object" || Array.isArray(j)) throw new EscrowError("invalid body", 400);
+  const { state, ...body } = j as Record<string, unknown>;
+  return { state, body };
 }

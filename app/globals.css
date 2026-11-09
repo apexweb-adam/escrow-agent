@@ -24,3 +24,5 @@ ul.crit{margin:8px 0;padding-left:18px;color:var(--muted);font-size:14px}li.pass
 .err{color:var(--bad);font-size:13px;margin-top:8px}.muted{color:var(--muted);font-size:13px}
 pre{white-space:pre-wrap;background:#0a1028;border:1px solid var(--line);padding:10px;border-radius:8px;font-size:12px;max-height:280px;overflow:auto}
 .ledger{height:320px;margin-top:20px}
+.note{font-size:13px;color:var(--text);background:#13224a;border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:0 0 20px}
+button.link{background:none;border:0;padding:0 4px;color:var(--accent);text-decoration:underline;font-size:13px}

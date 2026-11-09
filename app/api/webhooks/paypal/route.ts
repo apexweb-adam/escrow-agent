@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
 import { verifyWebhook } from "@/lib/paypal";
-import { findByOrder, log } from "@/lib/store";
+import { recordWebhook } from "@/lib/webhooks";
 import { guard } from "@/lib/http";
 
-const seen = new Set<string>();
-
+// PayPal webhooks are accepted only after PayPal itself confirms the signature.
 export async function POST(req: Request) {
   const g = guard(req, "webhook", 120); if (g) return g;
   const raw = await req.text();
@@ -12,11 +11,8 @@ export async function POST(req: Request) {
   let ok = false;
   try { ok = await verifyWebhook(req.headers, raw); } catch { ok = false; }
   if (!ok) return NextResponse.json({ error: "signature verification failed" }, { status: 401 });
-  const ev = JSON.parse(raw) as { id: string; event_type: string; resource?: { id?: string; supplementary_data?: { related_ids?: { order_id?: string } } } };
-  if (seen.has(ev.id)) return NextResponse.json({ ok: true, duplicate: true });
-  seen.add(ev.id);
-  const orderId = ev.resource?.supplementary_data?.related_ids?.order_id ?? ev.resource?.id ?? "";
-  const f = findByOrder(orderId);
-  if (f) log({ dealId: f.deal.id, milestoneId: f.m.id, milestone: f.m.title, event: "webhook", amount: 0, currency: f.deal.currency, paypalRef: ev.resource?.id ?? "", actor: "paypal", note: ev.event_type });
-  return NextResponse.json({ ok: true });
+  const ev = JSON.parse(raw) as { id?: string; event_type?: string };
+  const fresh = recordWebhook(String(ev.id ?? ""), String(ev.event_type ?? "unknown"));
+  console.log(`[webhook] verified ${String(ev.event_type ?? "unknown").slice(0, 60)}${fresh ? "" : " (duplicate)"}`);
+  return NextResponse.json({ ok: true, duplicate: !fresh });
 }
